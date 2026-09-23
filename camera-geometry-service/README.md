@@ -14,12 +14,12 @@
 
 ## 三角化方法（固定选择）
 
-**中点法（midpoint）**：每个匹配像素反投影成世界坐标系下的射线（相机中心 + 单位方向），取两条射线最近点对的中点作为三维点。绝不平均两个视图的像素坐标冒充三维点。每个匹配给出两个视图各自的重投影误差（重投影用针孔模型、无畸变），作业级报告最大与平均重投影误差（按每匹配两视图误差的均值聚合）。
+**中点法（midpoint）**：每个匹配像素反投影成世界坐标系下的射线（相机中心 + 单位方向），取两条射线最近点对的中点作为三维点。绝不平均两个视图的像素坐标冒充三维点。反投影是投影的严格逆过程：像素先回到**带畸变的**归一化平面 `(u-cx)/fx, (v-cy)/fy`，再按该相机自己的 Brown–Conrady 系数做反畸变（Newton 迭代求畸变映射的逆），得到针孔射线上的归一化点后才反投成射线。每个匹配给出两个视图各自的重投影误差（重投影走与投影接口完全相同的函数，**带上该相机的畸变系数**），作业级报告最大与平均重投影误差（按每匹配两视图误差的均值聚合）。因此「带畸变相机投影 → 匹配点三角化 → 重投影核对」整条往返与零畸变同量级闭合。
 
 ## 作业策略（全局一致）
 
 - **fail-fast**：任何非法输入在开算前整作业拒绝，返回带类型的结构化错误（HTTP 400）；不存在部分成功的作业，也不会对非法输入返回空结果。
-- 畸变系数整体可省略（按零畸变处理）；一旦给出则四项必须齐全。
+- 畸变系数整体可省略（按零畸变处理）；一旦给出则四项必须齐全。投影作业在顶层给出一份；三角化作业在每台相机对象内各自给出（两台相机可以不同）。
 - 服务无共享可变状态：并发作业完全隔离，各自的结果互不可见。
 
 ## 接口
@@ -28,7 +28,7 @@
 |---|---|---|
 | POST | `/api/v1/projections/jobs` | 投影作业：内参+畸变+图像尺寸+一批三维点 → 每点像素坐标、是否在像面内、像面外点数 |
 | POST | `/api/v1/projections/point` | 单点投影（与批量作业共用同一投影函数，结果一致） |
-| POST | `/api/v1/triangulations/jobs` | 三角化作业：两台相机（内参+外参）+ 匹配像点对 → 每对三维点与重投影误差、作业级最大/平均误差 |
+| POST | `/api/v1/triangulations/jobs` | 三角化作业：两台相机（内参+畸变+外参，畸变可省略按零处理）+ 匹配像点对 → 每对三维点与重投影误差、作业级最大/平均误差 |
 | GET | `/api/v1/presets` | 只读回显已注册内参预设 |
 | GET | `/api/v1/presets/cube-example` | 预置立方体标定算例（hd-1000 预设 + 单位立方体 8 角点） |
 | POST | `/api/v1/presets/cube-example/run` | 跑一遍立方体算例投影，`outOfBoundsCount` 应为 0 |
@@ -50,8 +50,10 @@ curl -s localhost:8080/api/v1/projections/jobs -H 'Content-Type: application/jso
 ```bash
 curl -s localhost:8080/api/v1/triangulations/jobs -H 'Content-Type: application/json' -d '{
   "camera1": {"intrinsics": {"fx": 1000, "fy": 1000, "cx": 960, "cy": 540},
+              "distortion": {"k1": -0.28, "k2": 0.07, "p1": 0.0015, "p2": -0.0010},
               "pose": {"rotation": [[1,0,0],[0,1,0],[0,0,1]], "translation": [0,0,0]}},
   "camera2": {"intrinsics": {"fx": 1000, "fy": 1000, "cx": 960, "cy": 540},
+              "distortion": {"k1": -0.18, "k2": 0.04, "p1": -0.0008, "p2": 0.0012},
               "pose": {"rotation": [[1,0,0],[0,1,0],[0,0,1]], "translation": [-1,0,0]}},
   "matches": [{"u1": 860, "v1": 490, "u2": 660, "v2": 490}]
 }'
@@ -83,6 +85,8 @@ docker run --rm -p 8080:8080 camera-geometry-service
 - `fx`、`fy` 同时加倍，像点到主点半径随之加倍（零畸变与带畸变均成立）
 - 归一化方向为 `X/Z`（防 `Z/X` 写反）
 - 立方体角点三角化后重投影贴回原像素，误差 < 1e-6 px（`TriangulationJobServiceTest`）
+- 两台带非零 k1/k2/p1/p2（且互不相同）的相机，投影→三角化→重投影整条往返同样 < 1e-6 px，三维角点恢复到 1e-6；相机省略 distortion 时按零畸变处理，行为不变（`TriangulationJobServiceTest` / `TriangulationDistortionWebTest`）
+- 反畸变是畸变的严格逆：`undistort(distort(x,y)) ≈ (x,y)`，零畸变下为恒等（`BrownConradyDistortionTest`）
 - `Z≤0`、焦距非正、图像尺寸为零、内参缺项、外参缺失、空匹配表分别被带类型拒绝（`ValidationWebTest`）
 - 单点投影与批量作业同点结果逐位一致（`ConsistencyWebTest`）
 - 16 路并发投影作业、8 路并发三角化作业结果互不串扰（`ConcurrencyIsolationWebTest`）
