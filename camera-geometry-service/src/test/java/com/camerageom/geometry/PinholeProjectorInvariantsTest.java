@@ -105,4 +105,33 @@ class PinholeProjectorInvariantsTest {
         assertNotEquals(clean.u(), distorted.u());
         assertNotEquals(clean.v(), distorted.v());
     }
+
+    @Test
+    void undistortInvertsDistortOnTheNormalizedPlane() {
+        // Back-projection relies on this inverse. Sample points are kept on the
+        // normalized image plane as it actually occurs for in-image pixels
+        // (|x|, |y| within the image diagonal / f ~ 1): Brown-Conrady with k2 != 0
+        // ceases to be injective far outside the image, where no real match lives.
+        List<double[]> normalizedPlane = List.of(
+                new double[]{0.0, 0.0},
+                new double[]{0.15, -0.1},
+                new double[]{-0.31, 0.2},
+                new double[]{0.62, -0.48},
+                new double[]{-0.5, -0.75},
+                new double[]{0.8, 0.55});
+        List<Distortion> distortions = List.of(
+                Distortion.ZERO,
+                new Distortion(-0.12, 0.015, 0.001, -0.0005),
+                new Distortion(0.08, -0.01, -0.002, 0.0008));
+        for (Distortion d : distortions) {
+            for (double[] xy : normalizedPlane) {
+                double x = xy[0];
+                double y = xy[1];
+                double[] warped = BrownConradyDistortion.distort(x, y, d);
+                double[] back = BrownConradyDistortion.undistort(warped[0], warped[1], d);
+                assertEquals(x, back[0], 1e-9, "undistort(distort(x)) must equal x");
+                assertEquals(y, back[1], 1e-9, "undistort(distort(y)) must equal y");
+            }
+        }
+    }
 }

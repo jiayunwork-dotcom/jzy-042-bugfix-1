@@ -1,0 +1,7 @@
+/workspace/camera-geometry-service/src/test/java/com/camerageom/api/ConcurrencyIsolationWebTest.java
+/workspace/camera-geometry-service/src/test/java/com/camerageom/api/ConsistencyWebTest.java
+/workspace/camera-geometry-service/src/test/java/com/camerageom/api/PresetAndStatusWebTest.java
+/workspace/camera-geometry-service/src/test/java/com/camerageom/api/TestJson.java
+/workspace/camera-geometry-service/src/test/java/com/camerageom/api/ValidationWebTest.java
+/workspace/camera-geometry-service/src/test/java/com/camerageom/geometry/PinholeProjectorInvariantsTest.java
+/workspace/camera-geometry-service/src/test/java/com/camerageom/jobs/TriangulationJobServiceTest.java

@@ -7,7 +7,6 @@ import com.camerageom.api.dto.Point3DDto;
 import com.camerageom.geometry.MidpointTriangulator;
 import com.camerageom.geometry.PinholeProjector;
 import com.camerageom.model.CameraView;
-import com.camerageom.model.Distortion;
 import com.camerageom.model.Pixel;
 import com.camerageom.model.Point3D;
 import com.camerageom.validation.ErrorCode;
@@ -55,8 +54,8 @@ public class TriangulationJobService {
             Pixel px1 = matches.get(i)[0];
             Pixel px2 = matches.get(i)[1];
             Point3D point = triangulator.triangulate(
-                    camera1.intrinsics(), camera1.pose(), px1,
-                    camera2.intrinsics(), camera2.pose(), px2);
+                    camera1.intrinsics(), camera1.distortion(), camera1.pose(), px1,
+                    camera2.intrinsics(), camera2.distortion(), camera2.pose(), px2);
             double err1 = reprojectionError(camera1, point, px1, i);
             double err2 = reprojectionError(camera2, point, px2, i);
             double combined = (err1 + err2) / 2.0;
@@ -78,7 +77,11 @@ public class TriangulationJobService {
                 results);
     }
 
-    /** Reprojects a world point into a view (pinhole, no distortion) and measures pixel distance. */
+    /**
+     * Reprojects a world point into a view through the SAME projection path as
+     * the projection endpoints (Brown-Conrady distortion honoured) and measures
+     * pixel distance against the observed (distorted) match pixel.
+     */
     private double reprojectionError(CameraView camera, Point3D worldPoint, Pixel observed, int matchIndex) {
         Point3D cameraPoint = camera.pose().toCameraCoordinates(worldPoint);
         if (cameraPoint.z() <= 0.0) {
@@ -86,7 +89,7 @@ public class TriangulationJobService {
                     "Triangulated point lies behind a camera and cannot be reprojected",
                     Map.of("matchIndex", matchIndex));
         }
-        Pixel reprojected = projector.project(camera.intrinsics(), Distortion.ZERO, cameraPoint);
+        Pixel reprojected = projector.project(camera.intrinsics(), camera.distortion(), cameraPoint);
         return Math.hypot(reprojected.u() - observed.u(), reprojected.v() - observed.v());
     }
 }

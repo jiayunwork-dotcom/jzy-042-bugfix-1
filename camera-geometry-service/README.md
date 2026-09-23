@@ -14,7 +14,7 @@
 
 ## 三角化方法（固定选择）
 
-**中点法（midpoint）**：每个匹配像素反投影成世界坐标系下的射线（相机中心 + 单位方向），取两条射线最近点对的中点作为三维点。绝不平均两个视图的像素坐标冒充三维点。每个匹配给出两个视图各自的重投影误差（重投影用针孔模型、无畸变），作业级报告最大与平均重投影误差（按每匹配两视图误差的均值聚合）。
+**中点法（midpoint）**：每个匹配像素反投影成世界坐标系下的射线（相机中心 + 单位方向），取两条射线最近点对的中点作为三维点。绝不平均两个视图的像素坐标冒充三维点。反投影严格逆用投影模型：像素先映射到**畸变后**的归一化坐标 `(u-cx)/fx, (v-cy)/fy`，再解 Brown–Conrady 逆映射（牛顿迭代）恢复无畸变归一化坐标，最后才形成射线。每个匹配给出两个视图各自的重投影误差（重投影走与投影接口完全相同的含畸变投影路径，与观测的畸变像素直接比对），作业级报告最大与平均重投影误差（按每匹配两视图误差的均值聚合）。三角化相机的 `distortion` 字段可省略（按零畸变处理）；一旦给出则四项必须齐全，与投影接口规则一致。
 
 ## 作业策略（全局一致）
 
@@ -28,7 +28,7 @@
 |---|---|---|
 | POST | `/api/v1/projections/jobs` | 投影作业：内参+畸变+图像尺寸+一批三维点 → 每点像素坐标、是否在像面内、像面外点数 |
 | POST | `/api/v1/projections/point` | 单点投影（与批量作业共用同一投影函数，结果一致） |
-| POST | `/api/v1/triangulations/jobs` | 三角化作业：两台相机（内参+外参）+ 匹配像点对 → 每对三维点与重投影误差、作业级最大/平均误差 |
+| POST | `/api/v1/triangulations/jobs` | 三角化作业：两台相机（内参+畸变+外参）+ 匹配像点对 → 每对三维点与重投影误差、作业级最大/平均误差 |
 | GET | `/api/v1/presets` | 只读回显已注册内参预设 |
 | GET | `/api/v1/presets/cube-example` | 预置立方体标定算例（hd-1000 预设 + 单位立方体 8 角点） |
 | POST | `/api/v1/presets/cube-example/run` | 跑一遍立方体算例投影，`outOfBoundsCount` 应为 0 |
@@ -50,8 +50,10 @@ curl -s localhost:8080/api/v1/projections/jobs -H 'Content-Type: application/jso
 ```bash
 curl -s localhost:8080/api/v1/triangulations/jobs -H 'Content-Type: application/json' -d '{
   "camera1": {"intrinsics": {"fx": 1000, "fy": 1000, "cx": 960, "cy": 540},
+              "distortion": {"k1": -0.12, "k2": 0.015, "p1": 0.001, "p2": -0.0005},
               "pose": {"rotation": [[1,0,0],[0,1,0],[0,0,1]], "translation": [0,0,0]}},
   "camera2": {"intrinsics": {"fx": 1000, "fy": 1000, "cx": 960, "cy": 540},
+              "distortion": {"k1": -0.12, "k2": 0.015, "p1": 0.001, "p2": -0.0005},
               "pose": {"rotation": [[1,0,0],[0,1,0],[0,0,1]], "translation": [-1,0,0]}},
   "matches": [{"u1": 860, "v1": 490, "u2": 660, "v2": 490}]
 }'
@@ -82,7 +84,8 @@ docker run --rm -p 8080:8080 camera-geometry-service
 - 点沿 Z 向远处平移，像点向主点收缩（零畸变下半径严格按 `z/(z+Δ)` 缩放）
 - `fx`、`fy` 同时加倍，像点到主点半径随之加倍（零畸变与带畸变均成立）
 - 归一化方向为 `X/Z`（防 `Z/X` 写反）
-- 立方体角点三角化后重投影贴回原像素，误差 < 1e-6 px（`TriangulationJobServiceTest`）
+- 立方体角点三角化后重投影贴回原像素，误差 < 1e-6 px（`TriangulationJobServiceTest`）；两台相机带非零（且互不相同）的 k1/k2/p1/p2 时同样闭环，恢复的三维点贴回角点真值、误差仍 < 1e-6 px
+- 畸变正反映射互逆：`undistort(distort(x,y)) ≈ (x,y)`（`PinholeProjectorInvariantsTest`）
 - `Z≤0`、焦距非正、图像尺寸为零、内参缺项、外参缺失、空匹配表分别被带类型拒绝（`ValidationWebTest`）
 - 单点投影与批量作业同点结果逐位一致（`ConsistencyWebTest`）
 - 16 路并发投影作业、8 路并发三角化作业结果互不串扰（`ConcurrencyIsolationWebTest`）

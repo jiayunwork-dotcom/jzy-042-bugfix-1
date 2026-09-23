@@ -1,0 +1,7 @@
+com/camerageom/api/ValidationWebTest.class
+com/camerageom/jobs/TriangulationJobServiceTest.class
+com/camerageom/api/TestJson.class
+com/camerageom/api/ConcurrencyIsolationWebTest.class
+com/camerageom/api/ConsistencyWebTest.class
+com/camerageom/geometry/PinholeProjectorInvariantsTest.class
+com/camerageom/api/PresetAndStatusWebTest.class

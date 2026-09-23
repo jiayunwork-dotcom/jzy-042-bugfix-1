@@ -1,7 +1,7 @@
 package com.camerageom.model;
 
 /**
- * One camera of a triangulation rig: intrinsics plus extrinsics.
+ * One camera of a triangulation rig: intrinsics, distortion coefficients and extrinsics.
  */
-public record CameraView(Intrinsics intrinsics, CameraPose pose) {
+public record CameraView(Intrinsics intrinsics, Distortion distortion, CameraPose pose) {
 }

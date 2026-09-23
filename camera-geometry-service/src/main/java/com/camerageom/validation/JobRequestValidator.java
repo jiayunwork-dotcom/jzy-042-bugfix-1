@@ -139,8 +139,9 @@ public final class JobRequestValidator {
                     "Missing camera at " + path, Map.of("path", path));
         }
         Intrinsics intrinsics = requireIntrinsics(dto.intrinsics(), path + ".intrinsics");
+        Distortion distortion = requireDistortion(dto.distortion(), path + ".distortion");
         CameraPose pose = requirePose(dto.pose(), path + ".pose");
-        return new CameraView(intrinsics, pose);
+        return new CameraView(intrinsics, distortion, pose);
     }
 
     public static CameraPose requirePose(PoseDto dto, String path) {
